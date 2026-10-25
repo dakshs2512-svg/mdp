@@ -116,3 +116,31 @@ This automatically boots:
 - It does **not** diagnose attention deficit hyperactivity disorder, clinical attention deficits, or neurological disorders.
 - It does **not** directly measure neurochemical or brain wave activity (e.g., EEG/fMRI).
 - All variations are non-medical behavioral proxies influenced by sleep, physical fatigue, display refresh rates, caffeine, and environment.
+
+
+## Quick start on Windows (localhost demo)
+
+1. Install **Python 3.10+** and **Node.js LTS**.
+2. Extract the project ZIP.
+3. Double-click `run_local.bat` (or run it from Command Prompt).
+4. Wait for the backend and frontend to start. Open:
+   - Frontend: http://localhost:5173
+   - Backend health: http://127.0.0.1:8000/api/health
+   - Interactive API docs: http://127.0.0.1:8000/docs
+
+The first launch creates `backend\venv`, installs Python requirements, and runs `npm install` if `node_modules` is missing. Internet access is required for the first-time package installation. Keep both terminal windows open during the demo.
+
+## Quick start on macOS/Linux
+
+Run `bash run.sh`. If the backend virtual environment does not exist yet, create it and install requirements first:
+
+```bash
+python3 -m venv backend/venv
+backend/venv/bin/python -m pip install -r backend/requirements.txt
+npm install
+bash run.sh
+```
+
+## Local demo scope
+
+The current backend includes `/api/health`, `/api/analyze`, and `/api/simulate/{archetype}`. The frontend has a client-side analysis fallback if the API is temporarily unreachable. Simulation output is synthetic demo data; actual task results are analyzed from the trials submitted by the frontend. This is a local academic prototype, not a clinically validated diagnostic tool.

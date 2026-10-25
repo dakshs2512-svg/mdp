@@ -84,6 +84,41 @@ export const DISTRACTOR_SYMBOLS = [
   SYMBOLS.ROSE_HEXAGON,
 ];
 
+
+// Main-test task targets. The target cue is randomized after each correctly
+// completed trial. The current target is excluded so it always changes.
+export const TASK_TARGETS = [
+  SYMBOLS.BLUE_CIRCLE,
+  SYMBOLS.PURPLE_CIRCLE,
+  SYMBOLS.AMBER_DIAMOND,
+  SYMBOLS.CYAN_SQUARE,
+  SYMBOLS.EMERALD_TRIANGLE,
+  SYMBOLS.ROSE_HEXAGON,
+];
+
+export function getNextTaskTarget(currentTargetId) {
+  const candidates = TASK_TARGETS.filter((symbol) => symbol.id !== currentTargetId);
+  const randomIndex = Math.floor(Math.random() * candidates.length);
+  return candidates[randomIndex] ?? TASK_TARGETS[0];
+}
+
+export function generateStimulusForTarget(targetSymbol, targetProbability = 0.75, previousSymbolId = null) {
+  const distractors = TASK_TARGETS.filter((symbol) => symbol.id !== targetSymbol.id);
+  const wantsTarget = Math.random() < targetProbability;
+  let chosen;
+
+  if (wantsTarget && targetSymbol.id !== previousSymbolId) {
+    chosen = targetSymbol;
+  } else {
+    const options = distractors.filter((symbol) => symbol.id !== previousSymbolId);
+    const available = options.length ? options : distractors;
+    chosen = available[Math.floor(Math.random() * available.length)];
+  }
+
+  // isTarget is task-dependent in the main test, not a permanent symbol trait.
+  return { ...chosen, isTarget: chosen.id === targetSymbol.id };
+}
+
 export const WORKING_MEMORY_GRID_SYMBOLS = [
   SYMBOLS.BLUE_CIRCLE,
   SYMBOLS.PURPLE_CIRCLE,
@@ -96,23 +131,47 @@ export const WORKING_MEMORY_GRID_SYMBOLS = [
 /**
  * Generate a randomized stimulus with 75% target ratio and 25% distractor ratio
  */
-export function generateRandomStimulus(targetProbability = 0.75) {
-  const isTarget = Math.random() < targetProbability;
-  if (isTarget) {
-    return SYMBOLS.BLUE_CIRCLE;
+export function generateRandomStimulus(targetProbability = 0.75, previousSymbolId = null) {
+  const candidates = [SYMBOLS.BLUE_CIRCLE, ...DISTRACTOR_SYMBOLS].filter(
+    (symbol) => symbol.id !== previousSymbolId
+  );
+  const target = candidates.find((symbol) => symbol.isTarget);
+  const distractors = candidates.filter((symbol) => !symbol.isTarget);
+  const wantsTarget = Math.random() < targetProbability;
+  if (wantsTarget && target) return target;
+  if (!wantsTarget && distractors.length > 0) {
+    return distractors[Math.floor(Math.random() * distractors.length)];
   }
-  // Pick random distractor
-  const randomIndex = Math.floor(Math.random() * DISTRACTOR_SYMBOLS.length);
-  return DISTRACTOR_SYMBOLS[randomIndex];
+  if (target) return target;
+  return distractors[Math.floor(Math.random() * distractors.length)];
 }
 
 /**
- * Practice round sequence (5 predefined trials: 3 targets, 2 distractors)
+ * Practice template: three targets and two distractors. Shuffle each round
+ * so the practice does not repeat the same exact sequence on every restart.
  */
-export const PRACTICE_SEQUENCE = [
-  SYMBOLS.BLUE_CIRCLE,     // 1: Target
-  SYMBOLS.PURPLE_CIRCLE,   // 2: Distractor (Purple Circle)
-  SYMBOLS.BLUE_CIRCLE,     // 3: Target
-  SYMBOLS.AMBER_DIAMOND,   // 4: Distractor (Diamond)
-  SYMBOLS.BLUE_CIRCLE,     // 5: Target
+const PRACTICE_TRIALS = [
+  SYMBOLS.BLUE_CIRCLE,
+  SYMBOLS.BLUE_CIRCLE,
+  SYMBOLS.BLUE_CIRCLE,
+  SYMBOLS.PURPLE_CIRCLE,
+  SYMBOLS.AMBER_DIAMOND,
 ];
+
+export function createPracticeSequence() {
+  const sequence = [...PRACTICE_TRIALS];
+  for (let i = sequence.length - 1; i > 0; i -= 1) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [sequence[i], sequence[j]] = [sequence[j], sequence[i]];
+  }
+  // Avoid identical symbols on adjacent practice trials where possible.
+  for (let i = 1; i < sequence.length; i += 1) {
+    if (sequence[i].id === sequence[i - 1].id) {
+      const swapIndex = sequence.findIndex((item, j) => j > i && item.id !== sequence[i - 1].id);
+      if (swapIndex !== -1) [sequence[i], sequence[swapIndex]] = [sequence[swapIndex], sequence[i]];
+    }
+  }
+  return sequence;
+}
+
+export const PRACTICE_SEQUENCE = createPracticeSequence();

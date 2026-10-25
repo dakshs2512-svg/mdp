@@ -15,7 +15,7 @@ import {
 } from "lucide-react";
 import Button from "../components/Button";
 import SymbolRenderer from "../components/SymbolRenderer";
-import { SYMBOLS, generateRandomStimulus, PRACTICE_SEQUENCE } from "../utils/symbols";
+import { SYMBOLS, generateRandomStimulus, createPracticeSequence, TASK_TARGETS, getNextTaskTarget, generateStimulusForTarget } from "../utils/symbols";
 import { analyzeSessionData } from "../utils/api";
 import { saveSession } from "../utils/storage";
 import { startMouseTracking, stopMouseTracking, snapshotAndResetMouseTrial } from "../utils/mouseTracker";
@@ -45,8 +45,10 @@ export default function ActiveTestPage() {
 
   // Stimulus Display State
   const [currentSymbol, setCurrentSymbol] = useState(null);
+  const [currentTargetSymbol, setCurrentTargetSymbol] = useState(SYMBOLS.BLUE_CIRCLE);
   const [practiceFeedback, setPracticeFeedback] = useState(null); // Practice round feedback only
   const [practiceIndex, setPracticeIndex] = useState(0);
+  const [practiceSequence, setPracticeSequence] = useState(() => createPracticeSequence());
   const [practiceScore, setPracticeScore] = useState({ correct: 0, total: 5 });
 
   // Main Test Progress & Telemetry State
@@ -79,6 +81,8 @@ export default function ActiveTestPage() {
 
   // Session Data Accumulators
   const allTrialsRef = useRef([]);
+  const previousStimulusIdRef = useRef(null);
+  const currentTargetRef = useRef(SYMBOLS.BLUE_CIRCLE);
   const interruptionsRef = useRef([]);
   const blurStartRef = useRef(null);
   const lastActivityTimeRef = useRef(null);
@@ -162,21 +166,23 @@ export default function ActiveTestPage() {
   // -------------------- PRACTICE ROUND SCHEDULER --------------------
   const startPracticeRound = () => {
     clearAllTimers();
+    const nextSequence = createPracticeSequence();
+    setPracticeSequence(nextSequence);
     setStage(STAGE_PRACTICE);
     setPracticeIndex(0);
     setPracticeFeedback(null);
-    setPracticeScore({ correct: 0, total: PRACTICE_SEQUENCE.length });
+    setPracticeScore({ correct: 0, total: nextSequence.length });
     runPracticeTrial(0, 0);
   };
 
   const runPracticeTrial = (index, currentCorrect) => {
-    if (index >= PRACTICE_SEQUENCE.length) {
+    if (index >= practiceSequence.length) {
       // Practice complete
       setStage(STAGE_PRACTICE_SUMMARY);
       return;
     }
 
-    const symbol = PRACTICE_SEQUENCE[index];
+    const symbol = practiceSequence[index];
     const onset = performance.now();
 
     activeStimulusRef.current = {
@@ -223,7 +229,7 @@ export default function ActiveTestPage() {
         }
 
         const nextCorrect = isCorrect ? currentCorrect + 1 : currentCorrect;
-        setPracticeScore({ correct: nextCorrect, total: PRACTICE_SEQUENCE.length });
+        setPracticeScore({ correct: nextCorrect, total: practiceSequence.length });
         setPracticeFeedback({ isCorrect, msg: feedbackMsg });
 
         // Inter-stimulus interval with feedback display (1300ms)
@@ -265,6 +271,9 @@ export default function ActiveTestPage() {
     setIsPaused(false);
     isFinishedRef.current = false;
     allTrialsRef.current = [];
+    previousStimulusIdRef.current = null;
+    currentTargetRef.current = SYMBOLS.BLUE_CIRCLE;
+    setCurrentTargetSymbol(SYMBOLS.BLUE_CIRCLE);
     interruptionsRef.current = [];
     inactivityPeriodsRef.current = [];
 
@@ -311,7 +320,14 @@ export default function ActiveTestPage() {
     isiTimerRef.current = setTimeout(() => {
       if (isFinishedRef.current || isPausedRef.current) return;
 
-      const symbol = generateRandomStimulus(0.75); // 75% target, 25% distractor
+      // The active target is shown in the UI. After a correct trial, the rule
+      // advances to the next target, so the assessment includes task switching.
+      const symbol = generateStimulusForTarget(
+        currentTargetRef.current,
+        0.75,
+        previousStimulusIdRef.current
+      );
+      previousStimulusIdRef.current = symbol.id;
       const onset = performance.now();
 
       activeStimulusRef.current = {
@@ -402,6 +418,12 @@ export default function ActiveTestPage() {
 
     allTrialsRef.current.push(trialRecord);
     setTrialsRecorded([...allTrialsRef.current]);
+
+    if (isCorrect) {
+      const nextTarget = getNextTaskTarget(currentTargetRef.current.id);
+      currentTargetRef.current = nextTarget;
+      setCurrentTargetSymbol(nextTarget);
+    }
   };
 
   // -------------------- USER MOTOR INPUT HANDLER --------------------
@@ -677,7 +699,7 @@ export default function ActiveTestPage() {
                 PRACTICE ROUND
               </span>
               <span className="text-xs text-slate-300 font-mono">
-                Trial {practiceIndex} of {PRACTICE_SEQUENCE.length}
+                Trial {practiceIndex} of {practiceSequence.length}
               </span>
             </div>
             <span className="text-xs text-slate-400">
@@ -834,7 +856,7 @@ export default function ActiveTestPage() {
                 </span>
                 <span className="hidden sm:inline-block text-slate-600">|</span>
                 <span className="hidden sm:inline-block font-mono text-slate-400">
-                  Target: Blue Circle
+                  Current target: {currentTargetSymbol.label}
                 </span>
               </div>
 
@@ -900,7 +922,7 @@ export default function ActiveTestPage() {
             onClick={() => registerUserResponse("mouse")}
             role="button"
             tabIndex={0}
-            aria-label="Concentration arena. Click or press Space when blue circle appears."
+            aria-label={`Concentration arena. Click or press Space when ${currentTargetSymbol.label} appears.`}
             className="my-6 flex-1 min-h-[380px] sm:min-h-[440px] rounded-3xl bg-[#0B1020] border-2 border-slate-800/90 flex flex-col items-center justify-center relative cursor-pointer select-none focus:outline-none"
           >
             {/* Subtle scientific grid background */}
@@ -923,10 +945,10 @@ export default function ActiveTestPage() {
           <div className="bg-[#121A2B] rounded-2xl p-4 border border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-4">
             <div className="flex items-center gap-3 text-xs text-slate-400 font-mono">
               <span className="text-slate-300">
-                Respond to <strong className="text-sky-400">Blue Circle</strong> only.
+                Respond to <strong className="text-sky-400">{currentTargetSymbol.label}</strong> only.
               </span>
               <span className="text-slate-600">•</span>
-              <span className="text-slate-400">Withhold on other shapes.</span>
+              <span className="text-slate-400">Withhold on all other symbols. Correct trials switch the target.</span>
             </div>
 
             <Button

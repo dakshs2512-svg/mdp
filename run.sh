@@ -1,56 +1,30 @@
 #!/usr/bin/env bash
-# Focus Drift — Complete Local Launch Script
-# Launches both FastAPI Backend (port 8000) and Vite Frontend (port 5173)
-
-DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
+set -e
+DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$DIR"
 
-# Ensure Node & npm from workspace tools are in PATH
-if [ -d "/Users/aditrisingh/.gemini/antigravity/scratch/.tools/bin" ]; then
-  export PATH="/Users/aditrisingh/.gemini/antigravity/scratch/.tools/bin:$PATH"
+if ! command -v python3 >/dev/null 2>&1; then
+  echo "Python 3 is required."; exit 1
+fi
+if ! command -v node >/dev/null 2>&1 || ! command -v npm >/dev/null 2>&1; then
+  echo "Node.js and npm are required."; exit 1
 fi
 
-echo "=========================================================="
-echo "    ⚡ FOCUS DRIFT — Sustained Attention & Drift AI      "
-echo "        College Multidisciplinary Project (MDP)           "
-echo "=========================================================="
-echo "Python: $(./backend/venv/bin/python --version 2>/dev/null || python3 --version)"
-echo "Node:   $(node -v 2>/dev/null || echo 'Not found')"
-echo ""
+if [ ! -x "backend/venv/bin/python" ]; then
+  echo "Creating backend virtual environment..."
+  python3 -m venv backend/venv
+fi
+backend/venv/bin/python -m pip install -r backend/requirements.txt
+if [ ! -d node_modules ]; then npm install; fi
 
-# Function to kill child processes on script exit
 cleanup() {
-  echo ""
-  echo "Shutting down Focus Drift services..."
-  if [ -n "$BACKEND_PID" ]; then
-    kill "$BACKEND_PID" 2>/dev/null || true
-  fi
-  if [ -n "$FRONTEND_PID" ]; then
-    kill "$FRONTEND_PID" 2>/dev/null || true
-  fi
-  exit 0
+  [ -n "${BACKEND_PID:-}" ] && kill "$BACKEND_PID" 2>/dev/null || true
 }
-trap cleanup SIGINT SIGTERM EXIT
+trap cleanup EXIT INT TERM
 
-# 1. Start FastAPI Backend in background
-echo "🚀 Starting FastAPI AI Change-Point Engine on http://127.0.0.1:8000..."
-cd "$DIR/backend"
-./venv/bin/uvicorn main:app --port 8000 --reload > /dev/null 2>&1 &
+echo "Starting Focus Drift API at http://127.0.0.1:8000"
+(cd backend && ./venv/bin/python -m uvicorn main:app --host 127.0.0.1 --port 8000 --reload) &
 BACKEND_PID=$!
-cd "$DIR"
-
-# Wait a moment for backend to initialize
-sleep 1.5
-
-# 2. Start Vite Frontend
-echo "🌐 Starting Vite React Frontend on http://localhost:5173..."
-echo "   Interactive UI: http://localhost:5173"
-echo "   API Swagger:    http://127.0.0.1:8000/docs"
-echo "=========================================================="
-echo "Press Ctrl+C to stop all services."
-echo ""
-
-npm run dev &
-FRONTEND_PID=$!
-
-wait
+sleep 2
+echo "Starting frontend at http://localhost:5173"
+npm run dev -- --host 127.0.0.1
